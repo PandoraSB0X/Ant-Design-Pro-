@@ -520,3 +520,148 @@ validateFieldsInternal(fields, {
 
 > [参考地址](https://blog.csdn.net/qq_33514421/article/details/81507354)
 
+
+
+# 基础列表组件BasicList的分析 
+
+> 以下基于基于 Ant Design Pro 1.1.0 版本 
+>
+> src/routes/List/BasicList.js 
+
+``` js
+import React, { PureComponent } from 'react';
+import { connect } from 'dva';
+import PageHeaderLayout from '../../layouts/PageHeaderLayout';
+
+@connect(({ list, loading }) => ({
+  list,
+  loading: loading.models.list,
+}))
+export default class BasicList extends PureComponent {
+  componentDidMount() {
+    this.props.dispatch({
+      type: 'list/fetch',
+      payload: {
+        count: 5,
+      },
+    });
+  }
+
+  render() {
+    return (
+      <PageHeaderLayout>{/* 具体页面内容 */}</PageHeaderLayout>
+    );
+  }
+}
+```
+
+### @connect 装饰器
+
+首先的组件写法中调用了 `dva` 所封装的 `react-redux` 的 `@connect` 装饰器，用来接收绑定的 `list` 这个 model 对应的 redux store。注意到这里的装饰器实际除了 `app.state.list` 以外还实际接收 `app.state.loading` 作为参数，这个 `loading` 的来源是 `src/index.js` 中调用的 `dva-loading` [2](https://segmentfault.com/a/1190000013102730?utm_source=tag-newest#fn-2) 这个插件。
+
+``` js
+/*
+* src/index.js
+*/
+import createLoading from 'dva-loading';
+app.use(createLoading());
+```
+
+它返回的信息包含了 global、model 和 effect 的异步加载完成情况。 
+
+``` js
+{
+  "global": true,
+  "models": {
+    "list": false,
+    "user": true,
+    "rule": false
+  },
+  "effects": {
+    "list/fetch": false,
+    "user/fetchCurrent": true,
+    "rule/fetch": false
+  }
+}
+```
+
+我们注意到在这里带上 `{count: 5}` 这个 payload 向 store 进行了一个类型为 `list/fetch` 的 dispatch，那我们到 `src/models/list.js` 中就可以找到具体的对应操作。 
+
+``` js
+import { queryFakeList } from '../services/api';
+
+export default {
+  namespace: 'list',
+
+  state: {
+    list: [],
+  },
+
+  effects: {
+    *fetch({ payload }, { call, put }) {
+      const response = yield call(queryFakeList, payload);
+      yield put({
+        type: 'queryList',
+        payload: Array.isArray(response) ? response : [],
+      });
+    },
+    /* ... */
+  },
+
+  reducers: {
+    queryList(state, action) {
+      return {
+        ...state,
+        list: action.payload,
+      };
+    },
+    /* ... */
+  },
+};
+
+```
+
+
+
+ ## 后端模拟数据（参考）
+
+通过上面的分析，我们可以看到 `list/fetch` 会造成带上 payload 的对 `src/services/api` 中 `queryFakeList` 的一次异步请求。 
+
+``` js
+export async function queryFakeList(params) {
+  return request(`/api/fake_list?${stringify(params)}`);
+}
+```
+
+走到这一步的时候，后端交互开始产生了。我们退到根目录下的 `.roadhogrc.mock.js` 这个文件。Ant Design Pro 直接沿用了 [roadhog](https://github.com/sorrycc/roadhog) 中自带的 mock 功能，在这里我们简单搜索一下就能看到具体的 mock 转发配置。 
+
+``` js
+import { getActivities, getNotice, getFakeList } from './mock/api';
+
+const proxy = {
+  // ...,
+  'GET /api/fake_list': getFakeList,
+};
+```
+
+那我们转进 `mock/api.js` 就可以看到 JSON 内容的生成了。
+
+在开发环境中，前后端开发服务器常常部署在 localhost 的不同端口，这个问题常常困扰前后端分离范式的开发者。但有了 roadhog 之后，对上述的 `.roadhogrc.mock.js` 稍做修改就可以在前端的开发服务器上“构建”一个本地反代，轻松避免这个问题。
+
+## 本地开发的跨域问题
+
+大多数浏览器要求 fetch 通过 HTTPS 进行，但对 localhost 有本地赦免，HTTP 下的 fetch 请求并不会遇到问题。（但是如果你给 localhost 做了 hosts 规则那本地开发赦免就不适用了。）
+
+另外，对于本地，浏览器依旧强制执行 CORS 跨域检查，后端端口如果不设置 `Access-Control-Allow-Origin` 响应头依旧会遇到跨域安全问题。roadhog 提供的这个功能就良好解决了本地开发调试的跨域问题。
+
+``` js
+// FROM https://github.com/sorrycc/roadhog#proxy
+"proxy": {
+  "/api": {
+    "target": "http://localhost:8080",
+    "changeOrigin": true,
+    "pathRewrite": { "^/api" : "" }
+  }
+}
+```
+
