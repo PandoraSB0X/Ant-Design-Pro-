@@ -524,6 +524,8 @@ validateFieldsInternal(fields, {
 
 # 基础列表组件BasicList的分析 
 
+> [原地址](https://segmentfault.com/a/1190000013102730?utm_source=tag-newest)
+>
 > 以下基于基于 Ant Design Pro 1.1.0 版本 
 >
 > src/routes/List/BasicList.js 
