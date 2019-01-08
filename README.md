@@ -55,6 +55,333 @@ $ npm start
 
 启动完成后会自动打开浏览器访问 [http://localhost:8000](http://localhost:8000/)
 
+
+
+# 项目小计
+
+- 新增页面后，要将组件引入到路由中，才会显示页面内容
+- 列表页的mock数据在 mock/rule.js中tableListDataSource 
+- src\locales\zh-CN\menu.js，，，嗯嗯，设置成显示中文（应该就是语言包）
+
+## export default 和 export 区别：
+
+1.export与export default均可用于导出常量、函数、文件、模块等
+ 2.你可以在其它文件或模块中通过import+(常量 | 函数 | 文件 | 模块)名的方式，将其导入，以便能够对其进行使用
+ 3.在一个文件或模块中，export、import可以有多个，export default仅有一个
+ 4.通过export方式导出，在导入时要加{ }，export default则不需要
+
+
+
+# dva.js实现dispatch的回调函数
+
+### 一、在dispatch中使用callback
+
+在`dva@2`中实现回调可以将回调函数作为参数`dispatch`：
+
+``` js
+dispatch({
+   type: 'model/fetch',
+   payload: {
+      resolve,
+      id: userId,
+   },
+   callback: res => {
+      console.log(res);
+   }
+})
+```
+
+然后在`model`的`effects`中这样写:
+
+```js
+*fetch({ payload, callback }, {call}) {
+  const response = yield call(services.fetch, payload);
+  if (response.code === 0) {
+    yield put({
+      type: 'reload',
+      payload: response,
+    });
+  if (callback) callback(response);
+}
+```
+
+### 二、在dispatch中使用then
+
+如果在`dva@1`中要实现回调可以用`Promise`实现：
+
+```js
+new Promise((resolve) => {
+    dispatch({
+       type: 'model/fetch',
+       payload: {
+          resolve,
+          id: userId,
+       }
+    })
+}).then((res) => {
+    console.log(res);//可以直接在这里实现其他方法
+})
+```
+
+然后在`model`的`effects`中这样写:
+
+```js
+...
+
+*fetch({ payload }, { call }) {
+  const { resolve } = payload;
+  const { data } = yield call(services.fetch, payload);
+  if (data.code === 0) {
+    // 通过resolve返回数据，返回的数据将在Promise的then函数中获取到
+    !!resolve && resolve(data.data);
+}
+```
+
+- 原创文章，转载请注明 ： [dva.js(and design)实现dispatch的回调函数](https://wsonh.com/article/38.html)
+- 原文出处： https://wsonh.com/article/38.html
+
+ 
+
+# *请求数据（详细）
+
+> https://www.liangjucai.com/article/324
+
+
+
+# 提交代码报错
+
+报错：
+
+``` bash
+
+× node ./scripts/lint-prettier.js found some errors. Please fix them and try committing again.
+ d:\office-automation\office-automation-frontend\config\router.config.js is no prettier, please use npm run prettier and git add !
+
+
+
+× npm run lint-staged:js found some errors. Please fix them and try committing again.
+
+> ant-design-pro@2.1.1 lint-staged:js d:\office-automation\office-automation-frontend
+> eslint --ext .js "d:\office-automation\office-automation-frontend\src\pages\Personnel\FlowExamine.js" "d:\office-automation\office-automation-frontend\src\pages\Personnel\FlowAudit.js" "d:\office-automation\office-automation-frontend\src\pages\Personnel\AddressList.js" "d:\office-automation\office-automation-frontend\src\pages\Administration\PurchaseRecord.js" "d:\office-automation\office-automation-frontend\src\pages\Administration\Purchase.js" "d:\office-automation\office-automation-frontend\src\pages\Administration\OrderMeeting.js" "d:\office-automation\office-automation-frontend\src\pages\Administration\HostApplication.js" "d:\office-automation\office-automation-frontend\src\pages\Administration\Activity.js" "d:\office-automation\office-automation-frontend\src\models\purchase.js" "d:\office-automation\office-automation-frontend\config\router.config.js"
+```
+
+把package.json中下面两句删除
+
+``` json
+  "lint-staged": "lint-staged",     
+"lint-staged:js": "eslint --ext .js",
+```
+
+报错：
+
+``` bash
+npm ERR! A complete log of this run can be found in:
+npm ERR!     C:\Users\Administrator\AppData\Roaming\npm-cache\_logs\2018-12-29T03_08_00_688Z-debug.log
+husky > pre-commit hook failed (add --no-verify to bypass)
+```
+
+卸载 husky
+
+``` bash
+npm uninstall husky
+或
+yarn remove husky
+```
+
+
+
+
+
+
+
+# PureComponent原理
+
+> 只有PureComponent检测到state或者props发生变化时，才会调用render方法，因此不用手动写额外的检查，从而提高性能，一般用在纯组件上。可以避免展示的组件不必要的多次重复渲染。
+
+如果是比较深的情况，也可以使用shouldComponentUpdate来手动单个比较是否需要重新渲染。
+
+``` js
+//通过比较props或state
+shouldComponentUpdate(nextProps, nextState) {
+  return nextProps.xxx.xx === props.xxx.xx;
+}
+```
+
+
+
+### 正确使用PureComponent
+
+父组件有一个render方法和click处理方法：
+
+``` js
+handleClick() {
+  let {items} = this.state
+
+  items.push('new-item')
+  this.setState({ items })
+}
+
+render() {
+  return (
+    <div>
+      <button onClick={this.handleClick} />
+      <ItemList items={this.state.items} />
+    </div>
+  )
+}
+
+作者：vi_young
+链接：https://juejin.im/post/5b1caceb5188257d63226743
+来源：掘金
+著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。
+```
+
+但是ItemList是一个纯组件，这个时候点击它是不会被渲染的，即使this.state.items加入了新的值。
+
+**但是通过一处可变对象就很容易改变这种情况，使之能够正确的被渲染。？**
+
+``` js
+handleClick() {
+  this.setState(prevState => ({
+    words: prevState.items.concat(['new-item'])
+  }))
+}
+```
+
+### 用法
+
+``` js
+import React { PureComponent, Component } from 'react';
+
+class Foo extends (PureComponent || Component) {//老版本的React也能兼容
+  //...
+}
+```
+
+
+
+# mock语法
+
+> https://github.com/nuysoft/Mock/wiki/Syntax-Specification
+
+
+
+# 框架运行流程：
+
+- 浏览器输入路径->脚手架获取路径->通过common匹配路径(分级匹配)->加载layouts页面->加载routes页面，调用dispatch()请求数据,加载->models模型接收，并调取services请求，并返回且封装->将请求到的参数传入components控件中->加载components控件，通过数据渲染，返回控件html。
+- 大概流程就是这样，antd pro框架已经集成了dva请求框架，和react-router路由框架，开发需要的只是去common中添加新页面的path，去routers中新增页面，如果有可复用的页面控件的话还可以去components中封装起来，然后去models中新增加一个模型，services中增加一个访问路径。
+
+
+
+- 碰到的坑：
+  - 不熟悉react生命周期，所以很多函数不知道干什么的。
+  - 开发之前要先看看dva和react-router，要不然会一脸懵逼。
+  - antd和antd pro是两个东西，antd是样式，antd pro是一个重型框架。
+  - antd pro 有自己的权限控制体系。
+  - dva 异步请求 有自己的方法来获取是否请求成功和结果。
+  - components中的请求要传给父页面来请求。
+
+纯净页面：
+
+``` js
+import React, { PureComponent } from 'react'; //加载react
+import { connect } from 'dva'; //dva请求框架
+import {
+  Card,
+} from 'antd'; //antd的控件库
+
+import BlankLayout from '../../layouts/BlankLayout'; //html框架
+import { getAuthority } from '../../utils/authority';//权限控制的工具类
+import {  routerRedux } from 'dva/router';//react-router路由框架
+import styles from './index.less';//本页面的css样式
+import RenderAuthorized from '../../components/Authorized';//antd的权限控制控件
+
+const FormItem = Form.Item;//定义form内的属性。
+const Authorized = RenderAuthorized(getAuthority());
+
+@connect(({ transaction,loading }) => ({ //dva的方法
+  transaction,    //加载模型
+  loading:loading.models.transaction,    //模型内的请求是否完成
+  submitting: loading.effects['transaction/create'],    //单请求是否完成
+}))
+
+@Form.create()    //from
+export default class Bland extends PureComponent {
+constructor(props) {  //初始化
+   		super(props);  
+	console.log('Bland初始化');
+};
+    state = {    //定义state
+	'xxx' :null,
+}
+componentWillMount() {     //render之前请求一次数据
+    this.props.dispatch({
+      type: 'xx/xx',
+      payload:{id:1},
+    });
+  	}
+  render() { //渲染页面
+    const { transaction,submitting} = this.props;     //props内的属性
+    const { getFieldDecorator, getFieldValue } = this.props.form;
+return (//html
+     	<Card
+     		bordered = {false}
+     	>
+     	</Card>
+    );
+  }
+}
+
+```
+
+
+
+
+
+---------------------
+作者：qq_27964605 
+来源：CSDN 
+原文：https://blog.csdn.net/qq_27964605/article/details/80521183 
+版权声明：本文为博主原创文章，转载请附上博文链接！
+
+ 
+
+
+
+### 关于按钮权限
+
+``` js
+//官方的写法与项目中的实际应用
+
+import RenderAuthorized from 'ant-design-pro/lib/Authorized';
+//（版本有差异）首先引入Authorized模块路径不对，要改成
+import RenderAuthorized from '@/components/Authorized';
+
+import { Alert } from 'antd';
+
+const Authorized = RenderAuthorized('user');
+const noMatch = <Alert message="No permission." type="error" showIcon />;
+
+ReactDOM.render(
+  <Authorized authority={['user', 'admin']} noMatch={noMatch}>
+    <Alert message="Use Array as a parameter passed!" type="success" showIcon />
+  </Authorized>,
+  mountNode,
+);
+```
+
+
+
+**Authorized组件的noMatch属性是支持嵌入其它组件的，这样你可以放提示信息的组件，甚至是跳转到登陆页的Redirect组件像这样： const noMatch = <Redirect exact from="/" to="/user/login"/>;** 
+
+
+
+### 权限管理案例
+
+> https://yq.aliyun.com/articles/652793
+
+
+
 # 权限管理的概念
 
 > 基于角色的访问控制方法（Role-Based-Access Control，简称RBAC）是目前公认的解决大型企业的统一资源访问控制的有效方法：减少授权管理的复杂性，降低管理开销，灵活的支持企业的安全策略，并对企业的变化有很大的伸缩性。
@@ -652,9 +979,8 @@ const proxy = {
 
 ## 本地开发的跨域问题
 
-大多数浏览器要求 fetch 通过 HTTPS 进行，但对 localhost 有本地赦免，HTTP 下的 fetch 请求并不会遇到问题。（但是如果你给 localhost 做了 hosts 规则那本地开发赦免就不适用了。）
-
-另外，对于本地，浏览器依旧强制执行 CORS 跨域检查，后端端口如果不设置 `Access-Control-Allow-Origin` 响应头依旧会遇到跨域安全问题。roadhog 提供的这个功能就良好解决了本地开发调试的跨域问题。
+- 大多数浏览器要求 fetch 通过 HTTPS 进行，但对 localhost 有本地赦免，HTTP 下的 fetch 请求并不会遇到问题。（但是如果你给 localhost 做了 hosts 规则那本地开发赦免就不适用了。）
+- 另外，对于本地，浏览器依旧强制执行 CORS 跨域检查，后端端口如果不设置 `Access-Control-Allow-Origin` 响应头依旧会遇到跨域安全问题。roadhog 提供的这个功能就良好解决了本地开发调试的跨域问题。
 
 ``` js
 // FROM https://github.com/sorrycc/roadhog#proxy
@@ -667,3 +993,46 @@ const proxy = {
 }
 ```
 
+
+
+# component的例子
+
+> [原地址](https://blog.csdn.net/antdz/article/details/81780277)
+
+
+
+
+
+# 较为详细的一个参考
+
+> https://www.jianshu.com/p/4c54ae2bc925
+
+
+
+# 使用props的基本原则
+
+> https://blog.csdn.net/hard_working1/article/details/51085325
+
+
+
+# ant design pro 导出excel
+
+> https://blog.csdn.net/qq_25252769/article/details/82996113
+
+
+
+# js修饰器  @
+
+> https://www.jianshu.com/p/96afd26e7a86
+
+
+
+# antdpro 获取数据，触发请求到服务器
+
+> https://www.jianshu.com/p/7dd08549d450
+
+
+
+# 分析数据流
+
+> https://blog.csdn.net/u013416951/article/details/81133733
